@@ -22,7 +22,7 @@ app.get("/scrap", async (req, res) => {
   const browser = await puppExtra.launch({
     browser: "chrome",
     headless: true,
-  });
+  }); 
   const context = await browser.createBrowserContext();
   const page = await context.newPage({
     type: "tab",
@@ -103,11 +103,11 @@ app.get("/scrap", async (req, res) => {
   let counter = 0;
   let length = 0;
   try {
-    res.setHeader("Content-Type", "text/event-stream"); // SSE format
-    res.setHeader("Cache-Control", "no-cache, no-transform"); // no-transform is key
-    res.setHeader("X-Accel-Buffering", "no"); // disables nginx/proxy buffering
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
+    // res.setHeader("Content-Type", "text/event-stream"); // SSE format
+    // res.setHeader("Cache-Control", "no-cache, no-transform"); // no-transform is key
+    // res.setHeader("X-Accel-Buffering", "no"); // disables nginx/proxy buffering
+    // res.setHeader("Connection", "keep-alive");
+    // res.flushHeaders();
     await Readable.toWeb(readableStream)
       .pipeThrough(
         new TransformStream({

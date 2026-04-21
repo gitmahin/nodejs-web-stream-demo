@@ -7,18 +7,53 @@ import { buffer } from "stream/consumers";
 export default function Home() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // -- Example 1
+  // const handleStreamData = useCallback(async () => {
+  //   const response = await fetch("http://localhost:5000/scrap");
+  //   const reader = response.body!.getReader();
+  //   const decoder = new TextDecoder();
+
+  //   while (true) {
+  //     const { done, value } = await reader.read();
+  //     if (done) break;
+
+  //     const chunk = JSON.parse(decoder.decode(value));
+  //     setProducts((prev) => [...prev, ...chunk]);
+  //   }
+  // }, []);
+
+  // -- Example 2
+  // const handleStreamData = useCallback(async () => {
+  //   const response = await fetch("http://localhost:5000/scrap");
+  //   const reader = response.body!.getReader();
+  //   const decoder = new TextDecoder();
+
+  //   try {
+  //     while (true) {
+  //       const { done, value } = await reader.read();
+  //       if (done) break;
+
+  //       const chunk = JSON.parse(decoder.decode(value));
+  //       setProducts(prev => [...prev, ...chunk]);
+  //     }
+  //   } catch (err) {
+  //     console.error("Stream error:", err);
+  //   } finally {
+  //     reader.releaseLock();
+  //   }
+  // }, []);
+
+  // -- Example 3. Recomended
   const handleStreamData = useCallback(async () => {
     const response = await fetch("http://localhost:5000/scrap");
-    const reader = response.body!.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = JSON.parse(decoder.decode(value));
-      setProducts((prev) => [...prev, ...chunk]);
-    }
+    await response.body!.pipeThrough(new TextDecoderStream()).pipeTo(
+      new WritableStream({
+        write(chunk) {
+          setProducts((prev) => [...prev, ...JSON.parse(chunk)]);
+        },
+      }),
+    );
   }, []);
 
   return (
