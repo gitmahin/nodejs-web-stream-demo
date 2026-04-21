@@ -22,7 +22,7 @@ app.get("/scrap", async (req, res) => {
   const browser = await puppExtra.launch({
     browser: "chrome",
     headless: true,
-  }); 
+  });
   const context = await browser.createBrowserContext();
   const page = await context.newPage({
     type: "tab",
@@ -103,15 +103,17 @@ app.get("/scrap", async (req, res) => {
   let counter = 0;
   let length = 0;
   try {
-    // res.setHeader("Content-Type", "text/event-stream"); // SSE format
-    // res.setHeader("Cache-Control", "no-cache, no-transform"); // no-transform is key
-    // res.setHeader("X-Accel-Buffering", "no"); // disables nginx/proxy buffering
-    // res.setHeader("Connection", "keep-alive");
-    // res.flushHeaders();
     await Readable.toWeb(readableStream)
       .pipeThrough(
         new TransformStream({
           buffer: "",
+          /**
+           * Transforms incoming data chunks into NDJSON (Newline Delimited JSON) format.
+           * It buffers the input, splits it by newlines, parses for logging/metrics,
+           * and enqueues the stringified data to the stream controller.
+           * @param {any} chunk - The data chunk from the generator.
+           * @param {TransformStreamDefaultController} controller - The stream controller.
+           */
           async transform(chunk, controller) {
             this.buffer += JSON.stringify(chunk) + "\n";
 

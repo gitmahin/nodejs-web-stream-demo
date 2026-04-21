@@ -49,7 +49,15 @@ export default function Home() {
     const response = await fetch("http://localhost:5000/scrap");
     await response.body!.pipeThrough(new TextDecoderStream()).pipeTo(
       new WritableStream({
-        write(chunk) {
+        write(chunk) { // never do heavy synchronous work inside write(). Keep it as fast as possible, just parse and set state.
+          // dont use logging here.
+          // it will cause stream to stop.
+          // Why?
+          //Because console.log is synchronous and blocking inside a WritableStream.write() — when you log a large object, it freezes the write method long enough that the stream controller times out and closes.
+
+          // Also in Next.js dev mode, console.log triggers React's console interceptor (intercept-console-error.ts — you saw it in your stack traces) which causes a re-render, which cancels the ongoing stream.
+
+
           setProducts((prev) => [...prev, ...JSON.parse(chunk)]);
         },
       }),
