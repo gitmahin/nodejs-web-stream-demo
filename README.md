@@ -77,7 +77,7 @@ new TransformStream({
   transform(chunk, controller) {
     this.buffer += chunk;
     const lines = this.buffer.split("\n");
-    this.buffer = lines.pop() ?? "";       // last line may be incomplete
+    this.buffer = lines.pop() ?? "";
     for (const line of lines) {
       if (!line.trim()) continue;
       try { controller.enqueue(JSON.parse(line)); } catch {}
