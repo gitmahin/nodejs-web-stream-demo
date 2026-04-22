@@ -1,11 +1,11 @@
-"use client";
 import { useEffect, useRef, useState } from "react";
 
 export default function Home() {
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [productsCount, setProductsCount] = useState(0);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  // -- Uncomment if you need
+  // const [productsCount, setProductsCount] = useState(0);
+  const bottomRef = useRef(null);
 
   // -- Example 1
   // const handleStreamData = useCallback(async () => {
@@ -33,24 +33,24 @@ export default function Home() {
     setLoading(true);
     try {
       const response = await fetch("http://localhost:5000/scrap");
-      await response
-        .body!.pipeThrough(new TextDecoderStream())
+      await response.body
+        .pipeThrough(new TextDecoderStream())
         .pipeThrough(
           new TransformStream({
             // 'buffer' is a custom property to store incomplete chunks between reads
             buffer: "",
 
             transform(chunk, controller) {
-              // chunk arrives as string (after TextDecoderStream)
+              // -- chunk arrives as string (after TextDecoderStream)
               // append to buffer because a chunk might be INCOMPLETE
               // e.g. chunk1: '[{"title":"foo' and chunk2: '"bar"}]\n'
               // we need to wait until we have a complete line
               this.buffer += chunk;
 
-              // split by newline — each complete line is one JSON object
+              // -- split by newline | each complete line is one JSON array
               const lines = this.buffer.split("\n");
 
-              // remove and return the LAST element
+              // -- remove and return the LAST element
               // the last element is always incomplete (no \n yet)
               // so we save it back to buffer for the next chunk
               this.buffer = lines.pop() ?? "";
@@ -63,7 +63,7 @@ export default function Home() {
                   const product = JSON.parse(line); // parse complete JSON line
 
                   controller.enqueue(product);
-                } catch {} // silently skip malformed JSON
+                } catch {} // skip JSON error
               }
             },
 
@@ -73,10 +73,10 @@ export default function Home() {
                 try {
                   const product = JSON.parse(this.buffer);
                   controller.enqueue(product);
-                } catch {}
+                } catch {} // skip JSON error
               }
             },
-          }as Transformer<string, any> & { buffer: string }) ,
+          }),
         )
         .pipeTo(
           new WritableStream({
@@ -92,6 +92,7 @@ export default function Home() {
           }),
         );
     } catch (error) {
+      console.error("Error streaming data:", error);
     } finally {
       setLoading(false);
     }
@@ -110,7 +111,7 @@ export default function Home() {
         onClick={handleStreamData}
         disabled={loading}
       >
-        {loading ? "Scraping..." : "Click me"}
+        {loading ? "Scraping..." : "Start Scraping"}
       </button>
 
       <div className="mt-3 text-lg text-black z-50 font-medium rounded-full fixed top-5 right-5 bg-white px-5 py-3">

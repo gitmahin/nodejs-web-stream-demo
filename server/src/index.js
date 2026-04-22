@@ -30,6 +30,7 @@ app.get("/scrap", async (req, res) => {
     });
     console.log("Scrapping the web");
 
+    // -- Generator function for scrapping data
     async function* getProducts(number_of_pages) {
       for (let i = 0; i < number_of_pages; i++) {
         try {
@@ -86,24 +87,25 @@ app.get("/scrap", async (req, res) => {
           });
           console.log(`Page ${i + 1} scraped`);
 
-          // Don't click on the last iteration (pagination)
+          // -- Don't click on the last iteration (pagination)
           if (i < number_of_pages - 1) {
-            // Wait for next button to be available and click
+            // -- Wait for next button to be available and click
             await page.waitForSelector(".ant-pagination-next", {
               timeout: 5000,
             });
 
-            // Click next page
+            // -- Click next page
             (await page.locator(".ant-pagination-next").click(),
               console.log(`Page ${i + 2} loaded`));
           }
         } catch (error) {
           console.error(`Error on page ${i + 1}:`, error.message);
-          break; // stop generator cleanly instead of crashing
+          break; // -- stop generator on error
         }
       }
     }
 
+    // -- Streaming
     const readableStream = Readable.from(getProducts(50));
     try {
       await Readable.toWeb(readableStream)
@@ -153,7 +155,7 @@ app.get("/scrap", async (req, res) => {
               }
             },
             flush(controller) {
-              // Handle any remaining data in buffer
+              // -- Handle any remaining data in buffer
               if (this.buffer.trim()) {
                 controller.enqueue(this.buffer + "\n");
               }
@@ -162,12 +164,12 @@ app.get("/scrap", async (req, res) => {
         )
         .pipeTo(Writable.toWeb(res));
     } catch (error) {
-      console.log("error", error);
+      console.log("Stream error: ", error);
     } finally {
       await context.close();
     }
   } catch (error) {
-    console.log("error", error);
+    console.log("Http error: ", error);
   } finally {
     res.end();
   }
