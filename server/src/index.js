@@ -41,7 +41,7 @@ app.get("/scrap", async (req, res) => {
             timeout: 10000,
           });
 
-          page.waitForFunction(
+          await page.waitForFunction(
             () => {
               const links = document.querySelectorAll(".productList > div > a");
 
