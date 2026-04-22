@@ -1,5 +1,50 @@
 import { useEffect, useRef, useState } from "react";
 
+const parseNdJSON = () => {
+  return new TransformStream({
+    // 'buffer' is a custom property to store incomplete chunks between reads
+    // For resolve - SyntaxError JSON.parse
+    buffer: "",
+
+    transform(chunk, controller) {
+      // -- chunk arrives as string (after TextDecoderStream)
+      // append to buffer because a chunk might be INCOMPLETE
+      // e.g. chunk1: '[{"title":"foo' and chunk2: '"bar"}]\n'
+      // we need to wait until we have a complete line
+      this.buffer += chunk;
+
+      // -- split by newline | each complete line is one JSON array
+      const lines = this.buffer.split("\n");
+
+      // -- remove and return the LAST element
+      // the last element is always incomplete (no \n yet)
+      // so we save it back to buffer for the next chunk
+      this.buffer = lines.pop() ?? "";
+
+      // now process only the COMPLETE lines
+      for (const line of lines) {
+        if (!line.trim()) continue; // skip empty lines
+
+        try {
+          const product = JSON.parse(line); // parse complete JSON line
+
+          controller.enqueue(product);
+        } catch {}
+      }
+    },
+
+    // handles any remaining data left in buffer that never got a \n
+    flush(controller) {
+      if (this.buffer.trim()) {
+        try {
+          const product = JSON.parse(this.buffer);
+          controller.enqueue(product);
+        } catch {}
+      }
+    },
+  });
+};
+
 export default function Home() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -29,55 +74,14 @@ export default function Home() {
   // }, []);
 
   // -- Example 2. Recomended
+  // -- Task: Implement Abort controller to abort or resume data scrapping. Hint: new AbortController() 
   const handleStreamData = async () => {
     setLoading(true);
     try {
       const response = await fetch("http://localhost:5000/scrap");
       await response.body
         .pipeThrough(new TextDecoderStream())
-        .pipeThrough(
-          new TransformStream({
-            // 'buffer' is a custom property to store incomplete chunks between reads
-            buffer: "",
-
-            transform(chunk, controller) {
-              // -- chunk arrives as string (after TextDecoderStream)
-              // append to buffer because a chunk might be INCOMPLETE
-              // e.g. chunk1: '[{"title":"foo' and chunk2: '"bar"}]\n'
-              // we need to wait until we have a complete line
-              this.buffer += chunk;
-
-              // -- split by newline | each complete line is one JSON array
-              const lines = this.buffer.split("\n");
-
-              // -- remove and return the LAST element
-              // the last element is always incomplete (no \n yet)
-              // so we save it back to buffer for the next chunk
-              this.buffer = lines.pop() ?? "";
-
-              // now process only the COMPLETE lines
-              for (const line of lines) {
-                if (!line.trim()) continue; // skip empty lines
-
-                try {
-                  const product = JSON.parse(line); // parse complete JSON line
-
-                  controller.enqueue(product);
-                } catch {} // skip JSON error
-              }
-            },
-
-            // handles any remaining data left in buffer that never got a \n
-            flush(controller) {
-              if (this.buffer.trim()) {
-                try {
-                  const product = JSON.parse(this.buffer);
-                  controller.enqueue(product);
-                } catch {} // skip JSON error
-              }
-            },
-          }),
-        )
+        .pipeThrough(parseNdJSON())
         .pipeTo(
           new WritableStream({
             write(chunk) {
