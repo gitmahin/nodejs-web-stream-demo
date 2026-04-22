@@ -1,4 +1,4 @@
-import express, { response } from "express";
+import express from "express";
 import cors from "cors";
 import puppeterStealthPlugin from "puppeteer-extra-plugin-stealth";
 import puppExtra from "puppeteer-extra";
@@ -15,39 +15,38 @@ app.use(
 
 puppExtra.use(puppeterStealthPlugin());
 puppExtra.use(puppAdblocker({ blockTrackers: true }));
+
 app.get("/scrap", async (req, res) => {
   try {
     console.log("Scrapping initialized success");
-
-    //   Setup puppeter browser
     const browser = await puppExtra.launch({
       browser: "chrome",
       headless: true,
     });
     const context = await browser.createBrowserContext();
-    const page = await context.newPage({
-      type: "tab",
-    });
+    const page = await context.newPage();
     await page.goto("https://skybuybd.com/shop/purse", {
       waitUntil: "networkidle2",
     });
     console.log("Scrapping the web");
 
-    async function* getProducts(number_of_products) {
-      for (let i = 0; i < number_of_products; i++) {
+    async function* getProducts(number_of_pages) {
+      for (let i = 0; i < number_of_pages; i++) {
         try {
-          // Wait for products on current page
+          // -- Wait for products on current page
           await page.waitForSelector(".productList > div > a", {
             timeout: 10000,
           });
 
+          // -- Wait while loading website UI
           await page.waitForFunction(
             () => {
               const links = document.querySelectorAll(".productList > div > a");
 
               if (links.length === 0) return false;
 
-              // Wait until no title contains "Sample"
+              // -- check if title contains "Sample".
+              // As the specified website add Sample text in product title during loading.
               const hasSample = Array.from(links).some((a) =>
                 a
                   .querySelector(".productTitle")
@@ -59,37 +58,30 @@ app.get("/scrap", async (req, res) => {
             { timeout: 10000 },
           );
 
-          // Yield current page data
-          const data = await page.$$eval(
-            ".productList > div > a",
-            (anchors) => {
-              return anchors.map((anchor) => {
-                const href = anchor.getAttribute("href") ?? "";
-                return {
-                  link: href,
-                  image:
-                    anchor
-                      .querySelector(".productImage")
-                      ?.getAttribute("src") ?? null,
-                  title:
-                    anchor
-                      .querySelector(".productTitle")
-                      ?.textContent?.trim() ?? null,
-                  sale_price:
-                    anchor
-                      .querySelector(".productPrice")
-                      ?.textContent?.trim() ?? null,
-                  regular_price:
-                    anchor.querySelector(".prevPrice")?.textContent?.trim() ??
-                    null,
-                };
-              });
-            },
-          );
-          console.log(`✅ Page ${i + 1} scraped: ${data.length} products`);
-          yield data;
+          // -- yield current page data
+          yield await page.$$eval(".productList > div > a", (anchors) => {
+            return anchors.map((anchor) => {
+              const href = anchor.getAttribute("href") ?? "";
+              return {
+                link: href,
+                image:
+                  anchor.querySelector(".productImage")?.getAttribute("src") ??
+                  null,
+                title:
+                  anchor.querySelector(".productTitle")?.textContent?.trim() ??
+                  null,
+                sale_price:
+                  anchor.querySelector(".productPrice")?.textContent?.trim() ??
+                  null,
+                regular_price:
+                  anchor.querySelector(".prevPrice")?.textContent?.trim() ??
+                  null,
+              };
+            });
+          });
+          console.log(`Page ${i + 1} scraped`);
 
-          // Don't click on the last iteration
+          // Don't click on the last iteration (pagination)
           if (i < number_of_products - 1) {
             // Wait for next button to be available and click
             await page.waitForSelector(
@@ -101,7 +93,6 @@ app.get("/scrap", async (req, res) => {
             await Promise.all([
               page.waitForFunction(
                 () => {
-                  // Wait for stale products to be replaced
                   return (
                     document.querySelectorAll(".productList > div > a").length >
                     0
@@ -112,22 +103,16 @@ app.get("/scrap", async (req, res) => {
               page.locator(".ant-pagination-next").click(),
             ]);
 
-            // Small buffer for re-render
-            await new Promise((r) => setTimeout(r, 500));
-            console.log(`✅ Page ${i + 2} loaded`);
+            console.log(`Page ${i + 2} loaded`);
           }
         } catch (error) {
-          console.error(`💥 Error on page ${i + 1}:`, error.message);
+          console.error(`Error on page ${i + 1}:`, error.message);
           break; // stop generator cleanly instead of crashing
         }
       }
     }
 
-    // console.log(data);
-
-    const readableStream = Readable.from(getProducts(30));
-    let counter = 0;
-    let length = 0;
+    const readableStream = Readable.from(getProducts(50));
     try {
       await Readable.toWeb(readableStream)
         .pipeThrough(
@@ -187,13 +172,11 @@ app.get("/scrap", async (req, res) => {
     } catch (error) {
       console.log("error", error);
     } finally {
-      console.log("counter", counter);
-      console.log("length", length);
-      res.end();
       await context.close();
     }
   } catch (error) {
     console.log("error", error);
+  } finally {
     res.end();
   }
 });
