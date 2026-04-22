@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 
-
 export default function Home() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,27 +33,64 @@ export default function Home() {
     setLoading(true);
     try {
       const response = await fetch("http://localhost:5000/scrap");
-      await response.body!.pipeThrough(new TextDecoderStream()).pipeTo(
-        new WritableStream({
-          write(chunk) {
-            // never do heavy synchronous work inside write(). Keep it as fast as possible, just parse and set state.
-            // dont use logging here.
-            // it will cause stream to stop.
-            // Why?
-            //Because console.log is synchronous and blocking inside a WritableStream.write() — when you log a large object, it freezes the write method long enough that the stream controller times out and closes.
+      await response
+        .body!.pipeThrough(new TextDecoderStream())
+        .pipeThrough(
+          new TransformStream({
+            // 'buffer' is a custom property to store incomplete chunks between reads
+            buffer: "",
 
-            // Also in Next.js dev mode, console.log triggers React's console interceptor (intercept-console-error.ts — you saw it in your stack traces) which causes a re-render, which cancels the ongoing stream.
+            transform(chunk, controller) {
+              // chunk arrives as string (after TextDecoderStream)
+              // append to buffer because a chunk might be INCOMPLETE
+              // e.g. chunk1: '[{"title":"foo' and chunk2: '"bar"}]\n'
+              // we need to wait until we have a complete line
+              this.buffer += chunk;
 
-            setProducts((prev) => {
-              // -- Showing 20 products on each page
-              // if (prev.length >= 20) {
-              //   return [...prev, ...JSON.parse(chunk)].slice(-20);
-              // }
-              return [...prev, ...JSON.parse(chunk)];
-            });
-          },
-        }),
-      );
+              // split by newline — each complete line is one JSON object
+              const lines = this.buffer.split("\n");
+
+              // remove and return the LAST element
+              // the last element is always incomplete (no \n yet)
+              // so we save it back to buffer for the next chunk
+              this.buffer = lines.pop() ?? "";
+
+              // now process only the COMPLETE lines
+              for (const line of lines) {
+                if (!line.trim()) continue; // skip empty lines
+
+                try {
+                  const product = JSON.parse(line); // parse complete JSON line
+
+                  controller.enqueue(product);
+                } catch {} // silently skip malformed JSON
+              }
+            },
+
+            // handles any remaining data left in buffer that never got a \n
+            flush(controller) {
+              if (this.buffer.trim()) {
+                try {
+                  const product = JSON.parse(this.buffer);
+                  controller.enqueue(product);
+                } catch {}
+              }
+            },
+          }as Transformer<string, any> & { buffer: string }) ,
+        )
+        .pipeTo(
+          new WritableStream({
+            write(chunk) {
+              setProducts((prev) => {
+                // -- Uncomment if you wanna show 20 products on each page
+                // if (prev.length >= 20) {
+                //   return [...prev, ...chunk].slice(-20);
+                // }
+                return [...prev, ...chunk];
+              });
+            },
+          }),
+        );
     } catch (error) {
     } finally {
       setLoading(false);

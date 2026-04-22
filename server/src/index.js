@@ -33,6 +33,11 @@ app.get("/scrap", async (req, res) => {
     async function* getProducts(number_of_pages) {
       for (let i = 0; i < number_of_pages; i++) {
         try {
+          // -- ⚠️ Dont do this. it will increase memory usage, rather click pagination manualy via locator
+          // await page.goto(`https://skybuybd.com/shop/purse?page=${i + 1}`, {
+          //   waitUntil: "networkidle2",
+          // });
+
           // -- Wait for products on current page
           await page.waitForSelector(".productList > div > a", {
             timeout: 10000,
@@ -82,28 +87,15 @@ app.get("/scrap", async (req, res) => {
           console.log(`Page ${i + 1} scraped`);
 
           // Don't click on the last iteration (pagination)
-          if (i < number_of_products - 1) {
+          if (i < number_of_pages - 1) {
             // Wait for next button to be available and click
-            await page.waitForSelector(
-              ".ant-pagination-next:not(.ant-pagination-disabled)",
-              { timeout: 5000 },
-            );
+            await page.waitForSelector(".ant-pagination-next", {
+              timeout: 5000,
+            });
 
-            // Click and wait for new products to load
-            await Promise.all([
-              page.waitForFunction(
-                () => {
-                  return (
-                    document.querySelectorAll(".productList > div > a").length >
-                    0
-                  );
-                },
-                { timeout: 10000 },
-              ),
-              page.locator(".ant-pagination-next").click(),
-            ]);
-
-            console.log(`Page ${i + 2} loaded`);
+            // Click next page
+            (await page.locator(".ant-pagination-next").click(),
+              console.log(`Page ${i + 2} loaded`));
           }
         } catch (error) {
           console.error(`Error on page ${i + 1}:`, error.message);
