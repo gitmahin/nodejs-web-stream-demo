@@ -1,4 +1,4 @@
-# 🌊 Node.js Web Streams — Live Scraping Demo
+# Node.js Web Streams - Live Scraping Demo
 
 A full-stack demonstration of **Node.js Web Streams API** for real-time, memory-efficient data streaming from a scraper to a React UI - with zero buffering on the server side.
 
